@@ -123,6 +123,9 @@ class ProfileStore {
         profiles[index].organizationId = credentials.organizationId
         profiles[index].apiSessionKey = credentials.apiSessionKey
         profiles[index].apiOrganizationId = credentials.apiOrganizationId
+        profiles[index].apiSessionKeyExpiry = credentials.apiSessionKeyExpiry
+        profiles[index].deepSeekAPIEndpoint = credentials.deepSeekAPIEndpoint
+        profiles[index].deepSeekAPIToken = credentials.deepSeekAPIToken
         profiles[index].cliCredentialsJSON = credentials.cliCredentialsJSON
 
         saveProfiles(profiles)
@@ -139,6 +142,9 @@ class ProfileStore {
             organizationId: profile.organizationId,
             apiSessionKey: profile.apiSessionKey,
             apiOrganizationId: profile.apiOrganizationId,
+            apiSessionKeyExpiry: profile.apiSessionKeyExpiry,
+            deepSeekAPIEndpoint: profile.deepSeekAPIEndpoint,
+            deepSeekAPIToken: profile.deepSeekAPIToken,
             cliCredentialsJSON: profile.cliCredentialsJSON
         )
     }

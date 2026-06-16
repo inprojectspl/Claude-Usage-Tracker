@@ -715,8 +715,8 @@ struct ProfileCredentialCardsRow: View {
             } label: {
                 CredentialMiniCard(
                     icon: "dollarsign.circle.fill",
-                    title: "API Console",
-                    isConnected: credentials?.apiSessionKey != nil,
+                    title: "API Billing",
+                    isConnected: credentials?.apiSessionKey != nil || credentials?.hasDeepSeekAPI == true,
                     isSelected: selectedSection == .apiConsole
                 )
             }
@@ -739,6 +739,9 @@ struct ProfileCredentialCardsRow: View {
             loadCredentials()
         }
         .onChange(of: profileManager.activeProfile?.id) { _, _ in
+            loadCredentials()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .credentialsChanged)) { _ in
             loadCredentials()
         }
     }

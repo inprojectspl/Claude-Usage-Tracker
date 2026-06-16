@@ -277,6 +277,9 @@ class ProfileManager: ObservableObject {
             profiles[index].organizationId = credentials.organizationId
             profiles[index].apiSessionKey = credentials.apiSessionKey
             profiles[index].apiOrganizationId = credentials.apiOrganizationId
+            profiles[index].apiSessionKeyExpiry = credentials.apiSessionKeyExpiry
+            profiles[index].deepSeekAPIEndpoint = credentials.deepSeekAPIEndpoint
+            profiles[index].deepSeekAPIToken = credentials.deepSeekAPIToken
             profiles[index].cliCredentialsJSON = credentials.cliCredentialsJSON
 
             if activeProfile?.id == profileId {
@@ -324,6 +327,7 @@ class ProfileManager: ObservableObject {
         if let index = profiles.firstIndex(where: { $0.id == profileId }) {
             profiles[index].apiSessionKey = nil
             profiles[index].apiOrganizationId = nil
+            profiles[index].apiSessionKeyExpiry = nil
             profiles[index].apiUsage = nil  // Clear saved usage data
 
             if activeProfile?.id == profileId {
@@ -336,6 +340,29 @@ class ProfileManager: ObservableObject {
         LoggingService.shared.log("ProfileManager: Removed API credentials for profile \(profileId)")
 
         // Post single notification for credential change
+        NotificationCenter.default.post(name: .credentialsChanged, object: nil)
+    }
+
+    /// Removes DeepSeek API credentials for a profile
+    func removeDeepSeekCredentials(for profileId: UUID) throws {
+        var creds = try profileStore.loadProfileCredentials(profileId)
+        creds.deepSeekAPIEndpoint = nil
+        creds.deepSeekAPIToken = nil
+        try profileStore.saveProfileCredentials(profileId, credentials: creds)
+
+        if let index = profiles.firstIndex(where: { $0.id == profileId }) {
+            profiles[index].deepSeekAPIEndpoint = nil
+            profiles[index].deepSeekAPIToken = nil
+            profiles[index].deepSeekUsage = nil
+
+            if activeProfile?.id == profileId {
+                activeProfile = profiles[index]
+            }
+
+            profileStore.saveProfiles(profiles)
+        }
+
+        LoggingService.shared.log("ProfileManager: Removed DeepSeek credentials for profile \(profileId)")
         NotificationCenter.default.post(name: .credentialsChanged, object: nil)
     }
 
@@ -387,6 +414,28 @@ class ProfileManager: ObservableObject {
     /// Loads API usage data for a specific profile
     func loadAPIUsage(for profileId: UUID) -> APIUsage? {
         return profiles.first(where: { $0.id == profileId })?.apiUsage
+    }
+
+    /// Saves DeepSeek usage data for a specific profile
+    func saveDeepSeekUsage(_ usage: DeepSeekUsage, for profileId: UUID) {
+        guard let index = profiles.firstIndex(where: { $0.id == profileId }) else {
+            LoggingService.shared.logError("saveDeepSeekUsage: Profile not found with ID: \(profileId)")
+            return
+        }
+
+        profiles[index].deepSeekUsage = usage
+
+        if activeProfile?.id == profileId {
+            activeProfile = profiles[index]
+        }
+
+        profileStore.saveProfiles(profiles)
+        LoggingService.shared.log("Saved DeepSeek usage for profile: \(profiles[index].name)")
+    }
+
+    /// Loads DeepSeek usage data for a specific profile
+    func loadDeepSeekUsage(for profileId: UUID) -> DeepSeekUsage? {
+        return profiles.first(where: { $0.id == profileId })?.deepSeekUsage
     }
 
     // MARK: - Profile Settings

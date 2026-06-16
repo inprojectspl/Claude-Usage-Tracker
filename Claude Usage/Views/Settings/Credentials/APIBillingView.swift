@@ -36,6 +36,10 @@ struct APIBillingView: View {
     @StateObject private var profileManager = ProfileManager.shared
     @State private var wizardState = APIWizardState()
     @State private var currentCredentials: ProfileCredentials?
+    @State private var deepSeekEndpoint: String = Constants.APIEndpoints.deepSeekUsage
+    @State private var deepSeekToken: String = ""
+    @State private var deepSeekValidationState: ValidationState = .idle
+    @State private var deepSeekPreview: DeepSeekUsage?
 
     private let apiService = ClaudeAPIService()
 
@@ -195,6 +199,150 @@ struct APIBillingView: View {
                         .strokeBorder(DesignTokens.Colors.cardBorder, lineWidth: 1)
                 )
 
+                // DeepSeek configuration
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: DesignTokens.Spacing.medium) {
+                        Circle()
+                            .fill(currentCredentials?.hasDeepSeekAPI == true ? Color.green : Color.secondary.opacity(0.4))
+                            .frame(width: DesignTokens.StatusDot.standard, height: DesignTokens.StatusDot.standard)
+
+                        VStack(alignment: .leading, spacing: DesignTokens.Spacing.extraSmall) {
+                            Text("DeepSeek")
+                                .font(DesignTokens.Typography.bodyMedium)
+
+                            if currentCredentials?.hasDeepSeekAPI == true {
+                                Text(maskKey(currentCredentials?.deepSeekAPIToken ?? ""))
+                                    .font(DesignTokens.Typography.captionMono)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text("general.not_connected".localized)
+                                    .font(DesignTokens.Typography.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        if currentCredentials?.hasDeepSeekAPI == true {
+                            Button(action: removeDeepSeekCredentials) {
+                                HStack(spacing: DesignTokens.Spacing.extraSmall) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: DesignTokens.Icons.small))
+                                    Text("common.remove".localized)
+                                        .font(DesignTokens.Typography.body)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
+                            .foregroundColor(.red)
+                        }
+                    }
+                    .padding(DesignTokens.Spacing.cardPadding)
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("DeepSeek Usage API")
+                                .font(.system(size: 13, weight: .medium))
+                            Text("Configure the organization endpoint and Bearer token used to read DeepSeek quota usage.")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Endpoint URL")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+
+                            TextField(Constants.APIEndpoints.deepSeekUsage, text: $deepSeekEndpoint)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 12, design: .monospaced))
+                                .padding(10)
+                                .background(DesignTokens.Colors.inputBackground)
+                                .cornerRadius(6)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .strokeBorder(DesignTokens.Colors.cardBorder, lineWidth: 1)
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Bearer Token")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+
+                            SecureField("sk-...", text: $deepSeekToken)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 12, design: .monospaced))
+                                .padding(10)
+                                .background(DesignTokens.Colors.inputBackground)
+                                .cornerRadius(6)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .strokeBorder(DesignTokens.Colors.cardBorder, lineWidth: 1)
+                                )
+                        }
+
+                        HStack(spacing: 10) {
+                            Spacer()
+
+                            Button(action: testDeepSeekConnection) {
+                                HStack(spacing: 6) {
+                                    if deepSeekValidationState.isValidating {
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                            .frame(width: 12, height: 12)
+                                    } else {
+                                        Image(systemName: "bolt.horizontal.circle")
+                                            .font(.system(size: 12))
+                                    }
+                                    Text(deepSeekValidationState.isValidating ? "Testing" : "Test")
+                                        .font(.system(size: 12))
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
+                            .disabled(!canSubmitDeepSeek || deepSeekValidationState.isValidating)
+
+                            Button(action: saveDeepSeekConfiguration) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "checkmark.circle")
+                                        .font(.system(size: 12))
+                                    Text("wizard.save_configuration".localized)
+                                        .font(.system(size: 12))
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.regular)
+                            .disabled(!canSubmitDeepSeek)
+                        }
+
+                        if case .success(let message) = deepSeekValidationState {
+                            deepSeekStatus(message: message, color: .green, icon: "checkmark.circle.fill")
+                        } else if case .error(let message) = deepSeekValidationState {
+                            deepSeekStatus(message: message, color: .red, icon: "exclamationmark.triangle.fill")
+                        }
+
+                        if let usage = deepSeekPreview {
+                            VStack(alignment: .leading, spacing: 6) {
+                                DeepSeekPreviewRow(title: "Daily", window: usage.daily)
+                                DeepSeekPreviewRow(title: "Monthly", window: usage.monthly)
+                            }
+                            .padding(10)
+                            .background(Color.primary.opacity(0.04))
+                            .cornerRadius(6)
+                        }
+                    }
+                    .padding(DesignTokens.Spacing.cardPadding)
+                }
+                .background(DesignTokens.Colors.cardBackground)
+                .cornerRadius(DesignTokens.Radius.card)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                        .strokeBorder(DesignTokens.Colors.cardBorder, lineWidth: 1)
+                )
+
                 Spacer()
             }
             .padding()
@@ -210,6 +358,8 @@ struct APIBillingView: View {
 
             // Reset wizard state
             wizardState = APIWizardState()
+            deepSeekValidationState = .idle
+            deepSeekPreview = nil
         }
     }
 
@@ -235,6 +385,8 @@ struct APIBillingView: View {
     private func loadCurrentCredentials() {
         guard let profile = profileManager.activeProfile else { return }
         currentCredentials = try? ProfileStore.shared.loadProfileCredentials(profile.id)
+        deepSeekEndpoint = currentCredentials?.deepSeekAPIEndpoint ?? Constants.APIEndpoints.deepSeekUsage
+        deepSeekToken = currentCredentials?.deepSeekAPIToken ?? ""
     }
 
     private func maskKey(_ key: String) -> String {
@@ -269,6 +421,131 @@ struct APIBillingView: View {
             ErrorLogger.shared.log(appError, severity: .error)
             ErrorPresenter.shared.showAlert(for: appError)
             LoggingService.shared.logError("APIBillingView: Failed to remove credentials - \(appError.message)")
+        }
+    }
+
+    private var canSubmitDeepSeek: Bool {
+        !deepSeekEndpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !deepSeekToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func testDeepSeekConnection() {
+        guard canSubmitDeepSeek else { return }
+        deepSeekValidationState = .validating
+        deepSeekPreview = nil
+
+        let endpoint = deepSeekEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = deepSeekToken.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task {
+            do {
+                let usage = try await apiService.fetchDeepSeekUsage(endpoint: endpoint, apiToken: token)
+                await MainActor.run {
+                    deepSeekPreview = usage
+                    deepSeekValidationState = .success("Connected. Daily remaining: \(usage.daily.formattedRemaining)")
+                }
+            } catch {
+                await MainActor.run {
+                    deepSeekValidationState = .error("Failed to fetch DeepSeek usage: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func saveDeepSeekConfiguration() {
+        guard canSubmitDeepSeek, let profileId = profileManager.activeProfile?.id else { return }
+
+        let endpoint = deepSeekEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = deepSeekToken.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        do {
+            var creds = try ProfileStore.shared.loadProfileCredentials(profileId)
+            creds.deepSeekAPIEndpoint = endpoint
+            creds.deepSeekAPIToken = token
+            try ProfileStore.shared.saveProfileCredentials(profileId, credentials: creds)
+
+            if var profile = profileManager.activeProfile {
+                profile.deepSeekAPIEndpoint = endpoint
+                profile.deepSeekAPIToken = token
+                if let preview = deepSeekPreview {
+                    profile.deepSeekUsage = preview
+                }
+                profileManager.updateProfile(profile)
+            }
+
+            if let preview = deepSeekPreview {
+                profileManager.saveDeepSeekUsage(preview, for: profileId)
+            }
+
+            NotificationCenter.default.post(name: .credentialsChanged, object: nil)
+            loadCurrentCredentials()
+            deepSeekValidationState = .success("DeepSeek configuration saved")
+        } catch {
+            deepSeekValidationState = .error("Failed to save DeepSeek configuration: \(error.localizedDescription)")
+        }
+    }
+
+    private func removeDeepSeekCredentials() {
+        guard let profileId = profileManager.activeProfile?.id else {
+            LoggingService.shared.logError("APIBillingView: No active profile for DeepSeek removal")
+            return
+        }
+
+        do {
+            try profileManager.removeDeepSeekCredentials(for: profileId)
+            deepSeekEndpoint = Constants.APIEndpoints.deepSeekUsage
+            deepSeekToken = ""
+            deepSeekPreview = nil
+            deepSeekValidationState = .idle
+            loadCurrentCredentials()
+        } catch {
+            let appError = AppError.wrap(error)
+            ErrorLogger.shared.log(appError, severity: .error)
+            ErrorPresenter.shared.showAlert(for: appError)
+        }
+    }
+
+    private func deepSeekStatus(message: String, color: Color, icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundColor(color)
+                .font(.system(size: 14))
+            Text(message)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.08))
+        .cornerRadius(6)
+    }
+}
+
+private struct DeepSeekPreviewRow: View {
+    let title: String
+    let window: DeepSeekUsageWindow
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                Text("\(window.requests) requests")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(window.formattedSpent) / \(window.formattedBudget)")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                Text("\(window.formattedRemaining) remaining")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
         }
     }
 }

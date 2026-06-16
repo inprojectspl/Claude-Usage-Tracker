@@ -147,6 +147,7 @@ enum Constants {
     enum APIEndpoints {
         static let claudeBase = "https://claude.ai/api"
         static let consoleBase = "https://console.anthropic.com/api"
+        static let deepSeekUsage = "https://permafrost.inprojects.ai/me/api"
     }
 
     // UI Timing

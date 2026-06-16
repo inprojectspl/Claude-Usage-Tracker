@@ -260,4 +260,71 @@ extension ClaudeAPIService {
             dailyCostCents: dailyTotals.isEmpty ? nil : dailyTotals
         )
     }
+
+    /// Fetches DeepSeek quota usage from a configurable organization endpoint.
+    func fetchDeepSeekUsage(endpoint: String, apiToken: String) async throws -> DeepSeekUsage {
+        guard let url = URL(string: endpoint),
+              let scheme = url.scheme?.lowercased(),
+              let host = url.host,
+              scheme == "https",
+              !host.isEmpty else {
+            throw APIError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(apiToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("\(scheme)://\(host)/me", forHTTPHeaderField: "Referer")
+        request.setValue("Claude-Usage-Tracker/DeepSeek-Usage", forHTTPHeaderField: "User-Agent")
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let duration = CFAbsoluteTimeGetCurrent() - startTime
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            NetworkLoggerService.shared.logRequest(
+                url: url.absoluteString, method: "GET", requestBody: nil,
+                responseData: nil, statusCode: nil, duration: duration, error: APIError.invalidResponse
+            )
+            throw APIError.invalidResponse
+        }
+
+        NetworkLoggerService.shared.logRequest(
+            url: url.absoluteString, method: "GET", requestBody: nil,
+            responseData: data, statusCode: httpResponse.statusCode, duration: duration, error: nil
+        )
+
+        switch httpResponse.statusCode {
+        case 200:
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let value = try container.decode(String.self)
+
+                let fractionalFormatter = ISO8601DateFormatter()
+                fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                if let date = fractionalFormatter.date(from: value) {
+                    return date
+                }
+
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime]
+                if let date = formatter.date(from: value) {
+                    return date
+                }
+
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Invalid ISO-8601 date: \(value)"
+                )
+            }
+            return try decoder.decode(DeepSeekUsage.self, from: data)
+        case 401, 403:
+            throw APIError.unauthorized
+        default:
+            throw APIError.serverError(statusCode: httpResponse.statusCode)
+        }
+    }
 }
