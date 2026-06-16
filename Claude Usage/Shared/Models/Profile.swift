@@ -19,6 +19,8 @@ struct Profile: Codable, Identifiable, Equatable {
     var apiSessionKey: String?
     var apiOrganizationId: String?
     var apiSessionKeyExpiry: Date?
+    var deepSeekAPIEndpoint: String?
+    var deepSeekAPIToken: String?
     var cliCredentialsJSON: String?
 
     // MARK: - CLI Account Sync Metadata
@@ -35,6 +37,7 @@ struct Profile: Codable, Identifiable, Equatable {
     // MARK: - Usage Data (Per-Profile)
     var claudeUsage: ClaudeUsage?
     var apiUsage: APIUsage?
+    var deepSeekUsage: DeepSeekUsage?
 
     // MARK: - Appearance Settings (Per-Profile)
     var iconConfig: MenuBarIconConfiguration
@@ -62,12 +65,15 @@ struct Profile: Codable, Identifiable, Equatable {
         apiSessionKey: String? = nil,
         apiOrganizationId: String? = nil,
         apiSessionKeyExpiry: Date? = nil,
+        deepSeekAPIEndpoint: String? = nil,
+        deepSeekAPIToken: String? = nil,
         cliCredentialsJSON: String? = nil,
         hasCliAccount: Bool = false,
         cliAccountSyncedAt: Date? = nil,
         oauthAccountJSON: String? = nil,
         claudeUsage: ClaudeUsage? = nil,
         apiUsage: APIUsage? = nil,
+        deepSeekUsage: DeepSeekUsage? = nil,
         iconConfig: MenuBarIconConfiguration = .default,
         refreshInterval: TimeInterval = 30.0,
         autoStartSessionEnabled: Bool = false,
@@ -84,12 +90,15 @@ struct Profile: Codable, Identifiable, Equatable {
         self.apiSessionKey = apiSessionKey
         self.apiOrganizationId = apiOrganizationId
         self.apiSessionKeyExpiry = apiSessionKeyExpiry
+        self.deepSeekAPIEndpoint = deepSeekAPIEndpoint
+        self.deepSeekAPIToken = deepSeekAPIToken
         self.cliCredentialsJSON = cliCredentialsJSON
         self.hasCliAccount = hasCliAccount
         self.cliAccountSyncedAt = cliAccountSyncedAt
         self.oauthAccountJSON = oauthAccountJSON
         self.claudeUsage = claudeUsage
         self.apiUsage = apiUsage
+        self.deepSeekUsage = deepSeekUsage
         self.iconConfig = iconConfig
         self.refreshInterval = refreshInterval
         self.autoStartSessionEnabled = autoStartSessionEnabled
@@ -109,10 +118,24 @@ struct Profile: Codable, Identifiable, Equatable {
         apiSessionKey != nil && apiOrganizationId != nil
     }
 
+    var hasDeepSeekAPI: Bool {
+        deepSeekAPIToken?.isEmpty == false
+    }
+
+    /// True if profile has credentials that can fetch Claude session usage.
+    var hasClaudeUsageCredentials: Bool {
+        hasClaudeAI || hasValidCLIOAuth
+    }
+
     /// True if profile has credentials that can fetch usage data (Claude.ai, CLI OAuth, or API Console)
     /// Note: System keychain fallback is handled in ClaudeAPIService.getAuthentication() during actual API calls
     var hasUsageCredentials: Bool {
-        hasClaudeAI || hasAPIConsole || hasValidCLIOAuth
+        hasClaudeUsageCredentials || hasAPIConsole
+    }
+
+    /// True if profile has any configured usage provider, including external providers.
+    var hasAnyUsageProviderCredentials: Bool {
+        hasUsageCredentials || hasDeepSeekAPI
     }
 
     /// True if profile has CLI OAuth credentials that are not expired
@@ -122,7 +145,7 @@ struct Profile: Codable, Identifiable, Equatable {
     }
 
     var hasAnyCredentials: Bool {
-        hasClaudeAI || hasAPIConsole || cliCredentialsJSON != nil
+        hasClaudeAI || hasAPIConsole || hasDeepSeekAPI || cliCredentialsJSON != nil
     }
 }
 
@@ -134,6 +157,8 @@ struct ProfileCredentials {
     var apiSessionKey: String?
     var apiOrganizationId: String?
     var apiSessionKeyExpiry: Date?
+    var deepSeekAPIEndpoint: String?
+    var deepSeekAPIToken: String?
     var cliCredentialsJSON: String?
 
     var hasClaudeAI: Bool {
@@ -142,6 +167,10 @@ struct ProfileCredentials {
 
     var hasAPIConsole: Bool {
         apiSessionKey != nil && apiOrganizationId != nil
+    }
+
+    var hasDeepSeekAPI: Bool {
+        deepSeekAPIToken?.isEmpty == false
     }
 
     var hasCLI: Bool {

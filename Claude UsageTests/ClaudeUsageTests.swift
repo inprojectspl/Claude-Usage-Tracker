@@ -69,6 +69,56 @@ final class ClaudeUsageTests: XCTestCase {
         XCTAssertEqual(original, decoded)
     }
 
+    func testDeepSeekUsageDecode() throws {
+        let json = """
+        {
+            "user": "test-user",
+            "role": "power",
+            "status": "active",
+            "daily": {
+                "budget_usd": 5.0,
+                "spent_usd": 1.25,
+                "remaining_usd": 3.75,
+                "requests": 4
+            },
+            "monthly": {
+                "budget_usd": 20.0,
+                "spent_usd": 2.5,
+                "remaining_usd": 17.5,
+                "requests": 12
+            },
+            "last_request_at": "2026-06-15T10:42:52Z",
+            "window_basis": "daily budget resets at UTC midnight"
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let usage = try decoder.decode(DeepSeekUsage.self, from: json)
+
+        XCTAssertEqual(usage.user, "test-user")
+        XCTAssertEqual(usage.status, "active")
+        XCTAssertEqual(usage.daily.budgetUSD, 5.0)
+        XCTAssertEqual(usage.daily.spentUSD, 1.25)
+        XCTAssertEqual(usage.daily.remainingUSD, 3.75)
+        XCTAssertEqual(usage.daily.requests, 4)
+        XCTAssertEqual(usage.monthly.usagePercentage, 12.5)
+        XCTAssertTrue(usage.isActive)
+        XCTAssertNotNil(usage.lastRequestAt)
+    }
+
+    func testDeepSeekRejectsPlainHTTPEndpoint() async {
+        do {
+            _ = try await ClaudeAPIService().fetchDeepSeekUsage(
+                endpoint: "http://example.com/me/api",
+                apiToken: "test-token"
+            )
+            XCTFail("Expected plain HTTP DeepSeek endpoints to be rejected")
+        } catch {
+            XCTAssertNotNil(error)
+        }
+    }
+
     // MARK: - Helpers
 
     private func createUsage(sessionPercentage: Double) -> ClaudeUsage {

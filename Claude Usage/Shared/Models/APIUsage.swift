@@ -178,3 +178,87 @@ struct APIOrganization: Codable, Identifiable, Equatable {
         name.isEmpty ? id : name
     }
 }
+
+// MARK: - DeepSeek Usage
+
+struct DeepSeekUsageWindow: Codable, Equatable {
+    let budgetUSD: Double
+    let spentUSD: Double
+    let remainingUSD: Double
+    let requests: Int
+
+    var usagePercentage: Double {
+        guard budgetUSD > 0 else { return 0 }
+        return (spentUSD / budgetUSD) * 100.0
+    }
+
+    var formattedSpent: String {
+        Self.formatUSD(spentUSD)
+    }
+
+    var formattedRemaining: String {
+        Self.formatUSD(remainingUSD)
+    }
+
+    var formattedBudget: String {
+        Self.formatUSD(budgetUSD)
+    }
+
+    static func formatUSD(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.minimumFractionDigits = amount < 1 ? 4 : 2
+        formatter.maximumFractionDigits = amount < 1 ? 4 : 2
+        return formatter.string(from: NSNumber(value: amount)) ?? String(format: "$%.2f", amount)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case budgetUSD = "budget_usd"
+        case spentUSD = "spent_usd"
+        case remainingUSD = "remaining_usd"
+        case requests
+    }
+}
+
+struct DeepSeekUsage: Codable, Equatable {
+    let user: String
+    let role: String
+    let status: String
+    let daily: DeepSeekUsageWindow
+    let monthly: DeepSeekUsageWindow
+    let lastRequestAt: Date?
+    let windowBasis: String?
+
+    var dailyResetAt: Date {
+        Self.nextUTCStart(matching: [.year, .month, .day], adding: .day)
+    }
+
+    var monthlyResetAt: Date {
+        Self.nextUTCStart(matching: [.year, .month], adding: .month)
+    }
+
+    var isActive: Bool {
+        status.lowercased() == "active"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case user
+        case role
+        case status
+        case daily
+        case monthly
+        case lastRequestAt = "last_request_at"
+        case windowBasis = "window_basis"
+    }
+
+    private static func nextUTCStart(matching components: Set<Calendar.Component>, adding component: Calendar.Component) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let now = Date()
+        let currentComponents = calendar.dateComponents(components, from: now)
+        let currentStart = calendar.date(from: currentComponents) ?? now
+        return calendar.date(byAdding: component, value: 1, to: currentStart) ?? now
+    }
+}

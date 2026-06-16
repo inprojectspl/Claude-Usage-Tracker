@@ -87,6 +87,13 @@ struct PopoverContentView: View {
         return manager.apiUsage
     }
 
+    private var displayDeepSeekUsage: DeepSeekUsage? {
+        if manager.clickedProfileUsage != nil {
+            return manager.clickedProfileDeepSeekUsage
+        }
+        return manager.deepSeekUsage
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
@@ -188,7 +195,11 @@ struct PopoverContentView: View {
             }
 
             // Usage
-            SmartUsageDashboard(usage: displayUsage, apiUsage: displayAPIUsage)
+            SmartUsageDashboard(
+                usage: displayUsage,
+                apiUsage: displayAPIUsage,
+                deepSeekUsage: displayDeepSeekUsage
+            )
 
             // Contextual Insights
             if showInsights {
@@ -544,6 +555,7 @@ struct HeaderIconButton: View {
 struct SmartUsageDashboard: View {
     let usage: ClaudeUsage
     let apiUsage: APIUsage?
+    let deepSeekUsage: DeepSeekUsage?
     @StateObject private var profileManager = ProfileManager.shared
     @ObservedObject private var peakHoursService = PeakHoursService.shared
 
@@ -673,6 +685,14 @@ struct SmartUsageDashboard: View {
                 if let costCents = apiUsage.apiTokenCostCents, costCents > 0 {
                     APICostCard(apiUsage: apiUsage)
                 }
+            }
+
+            if let deepSeekUsage = deepSeekUsage {
+                DeepSeekUsageCard(
+                    usage: deepSeekUsage,
+                    showRemaining: showRemainingPercentage,
+                    timeDisplay: timeDisplay
+                )
             }
         }
         .padding(.horizontal, 14)
@@ -1231,6 +1251,177 @@ struct APICostSourceRow: View {
                 .padding(.trailing, 6)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+        }
+    }
+}
+
+// MARK: - DeepSeek Usage Card
+struct DeepSeekUsageCard: View {
+    let usage: DeepSeekUsage
+    let showRemaining: Bool
+    var timeDisplay: PopoverTimeDisplay = .resetTime
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("DeepSeek")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
+
+                    Text("\(usage.user) - \(usage.status.capitalized)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                if usage.isActive {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.adaptiveGreen)
+                }
+            }
+
+            DeepSeekUsageWindowRow(
+                title: "Daily",
+                window: usage.daily,
+                resetTime: usage.dailyResetAt,
+                showRemaining: showRemaining,
+                timeDisplay: timeDisplay
+            )
+
+            DeepSeekUsageWindowRow(
+                title: "Monthly",
+                window: usage.monthly,
+                resetTime: usage.monthlyResetAt,
+                showRemaining: showRemaining,
+                timeDisplay: timeDisplay
+            )
+
+            if let lastRequestAt = usage.lastRequestAt {
+                HStack {
+                    Text("Last request")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(relativeDateText(for: lastRequestAt))
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+        )
+    }
+
+    private func relativeDateText(for date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+struct DeepSeekUsageWindowRow: View {
+    let title: String
+    let window: DeepSeekUsageWindow
+    let resetTime: Date
+    let showRemaining: Bool
+    let timeDisplay: PopoverTimeDisplay
+
+    private var displayPercentage: Double {
+        UsageStatusCalculator.getDisplayPercentage(
+            usedPercentage: window.usagePercentage,
+            showRemaining: showRemaining
+        )
+    }
+
+    private var statusLevel: UsageStatusLevel {
+        UsageStatusCalculator.calculateStatus(
+            usedPercentage: window.usagePercentage,
+            showRemaining: showRemaining
+        )
+    }
+
+    private var usageColor: Color {
+        switch statusLevel {
+        case .safe: return .adaptiveGreen
+        case .moderate: return .orange
+        case .critical: return .red
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    Text("\(window.formattedSpent) / \(window.formattedBudget)")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("\(Int(displayPercentage))%")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(usageColor)
+
+                    Text("\(window.requests) req")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2.5)
+                        .fill(Color.primary.opacity(0.08))
+
+                    RoundedRectangle(cornerRadius: 2.5)
+                        .fill(usageColor)
+                        .frame(width: geometry.size.width * min(displayPercentage / 100.0, 1.0))
+                        .animation(.easeInOut(duration: 0.6), value: displayPercentage)
+                }
+            }
+            .frame(height: 4)
+
+            HStack {
+                Text("Remaining \(window.formattedRemaining)")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Text(resetTimeText(for: resetTime))
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(7)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.primary.opacity(0.035))
+        )
+    }
+
+    private func resetTimeText(for reset: Date) -> String {
+        switch timeDisplay {
+        case .resetTime:
+            return "menubar.resets_time".localized(with: reset.resetTimeString())
+        case .remainingTime:
+            return "menubar.resets_in".localized(with: reset.timeRemainingString())
+        case .both:
+            return "menubar.resets_both".localized(with: reset.timeRemainingString(), reset.resetTimeString())
         }
     }
 }

@@ -21,4 +21,7 @@ protocol APIServiceProtocol {
     // MARK: - Console API
     func fetchConsoleOrganizations(apiSessionKey: String) async throws -> [APIOrganization]
     func fetchAPIUsageData(organizationId: String, apiSessionKey: String) async throws -> APIUsage
+
+    // MARK: - DeepSeek API
+    func fetchDeepSeekUsage(endpoint: String, apiToken: String) async throws -> DeepSeekUsage
 }
